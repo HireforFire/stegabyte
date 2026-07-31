@@ -110,8 +110,9 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
         setAnnouncement("Rejected: not a PNG.");
         return false;
       }
-      // Reset prior errors on success.
+      // Reset prior errors and stale announcements on success.
       setError(null);
+      setAnnouncement("");
       return true;
     },
     [maxSize],
@@ -179,6 +180,21 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDrag(false);
+    // Reject folders up front. The browser reports them as File objects
+    // with size=0 and type=""; magic-byte sniff would also reject them,
+    // but with a confusing "this isn't a PNG" message instead of the
+    // specific "folders aren't supported" we can give here.
+    const items = e.dataTransfer.items;
+    if (items && items.length > 0) {
+      for (let i = 0; i < items.length; i += 1) {
+        const entry = items[i]?.webkitGetAsEntry?.();
+        if (entry && entry.isDirectory) {
+          setError("Folders aren't supported. Drop a single PNG file instead.");
+          setAnnouncement("Folder dropped — not supported.");
+          return;
+        }
+      }
+    }
     const files = e.dataTransfer.files;
     if (files && files.length > 0) void handleFiles(files);
   };

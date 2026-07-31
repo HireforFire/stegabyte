@@ -78,11 +78,14 @@ export async function readPngHeader(file: Blob): Promise<PngHeader> {
     return { isPng: false, reason: "truncated" };
   }
 
-  // Read the bytes we need. Using `arrayBuffer()` on the whole blob is fine
-  // because the caller is responsible for keeping these tiny — we never
-  // look beyond the first 24 bytes regardless of file size.
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer, 0, Math.min(PNG_HEADER_BYTES, file.size));
+  // Read ONLY the bytes we need (≤26), not the entire file. v1.0 read the
+  // whole blob into memory — a 25 MB drop would allocate a 25 MB ArrayBuffer
+  // on the main thread for every pick. Slicing first keeps this at a
+  // constant memory cost regardless of file size.
+  const headerBytes = Math.min(PNG_HEADER_BYTES, file.size);
+  const slice = file.slice(0, headerBytes);
+  const buffer = await slice.arrayBuffer();
+  const bytes = new Uint8Array(buffer, 0, headerBytes);
 
   // Magic check (8 bytes).
   for (let i = 0; i < PNG_MAGIC.length; i += 1) {

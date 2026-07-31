@@ -33,6 +33,7 @@ export function ExtractPage() {
   const [processingLabel, setProcessingLabel] = React.useState("Reading pixels…");
   const [plaintext, setPlaintext] = React.useState<string | null>(null);
   const [showPlaintext, setShowPlaintext] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [headerInfo, setHeaderInfo] = React.useState<{
     version: number;
@@ -118,9 +119,17 @@ export function ExtractPage() {
 
   const copyToClipboard = React.useCallback(() => {
     if (!plaintext) return;
-    navigator.clipboard.writeText(plaintext).then(() => {
-      notify.info("Copied to clipboard.");
-    });
+    navigator.clipboard.writeText(plaintext).then(
+      () => notify.success("Copied to clipboard."),
+      (err: unknown) => {
+        // Clipboard API rejects in insecure contexts (HTTP) or when
+        // permission is denied. Surface the failure rather than
+        // silently no-op'ing — and skip the notification if the
+        // browser doesn't expose clipboard at all.
+        const msg = err instanceof Error ? err.message : "Clipboard unavailable.";
+        notify.error(`Couldn't copy to clipboard: ${msg}`);
+      },
+    );
   }, [plaintext]);
 
   const downloadPlaintext = React.useCallback(() => {
@@ -184,16 +193,33 @@ export function ExtractPage() {
               <Label htmlFor="extract-pw">
                 Password <span className="text-[#fca5a5]/80">*</span>
               </Label>
-              <Input
-                id="extract-pw"
-                type="password"
-                placeholder="Min. 8 characters"
-                autoComplete="current-password"
-                aria-required="true"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-              />
+              <div className="relative">
+                <Input
+                  id="extract-pw"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Min. 8 characters"
+                  autoComplete="current-password"
+                  aria-required="true"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  disabled={loading}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded text-white/40 hover:text-white/70 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan/50"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
               <PasswordStrength password={password} />
             </div>
 

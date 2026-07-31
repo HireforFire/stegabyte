@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Download, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Lock, Download, ShieldCheck, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,7 +27,7 @@ import { notify } from "@/components/ui/toaster";
 import { useEncryptStore } from "@/stores/encrypt-store";
 import { useCryptoWorker } from "@/hooks/use-crypto-worker";
 import { readPngPixels, encodeAndRenderPng, isPngBuffer } from "@/lib/stego/png-lsb";
-import { formatBytes } from "@/lib/utils";
+import { formatBytes, hexToBytes } from "@/lib/utils";
 
 const schema = z.object({
   message: z.string().min(1, "Message is required."),
@@ -43,6 +43,7 @@ export function EncryptPage() {
   const [loading, setLoading] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
   const [capacity, setCapacity] = React.useState(0);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const store = useEncryptStore();
   const { encryptInWorker } = useCryptoWorker();
@@ -114,19 +115,24 @@ export function EncryptPage() {
 
       try {
         const { pixels: pxData, width, height } = await readPngPixels(imageBuffer);
-        const pixelBytes = new Uint8Array(pxData.buffer);
+        // `readPngPixels` already returns a freshly-allocated Uint8Array
+        // (not aliased to the canvas), so we can use it directly. The
+        // copy was a v1.0 workaround that just allocated a second buffer.
+        const pixelBytes = pxData;
 
         store.setProgress(0.15);
         const encrypted = await encryptInWorker({ plaintext: message, password });
 
         store.setStatus("embedding");
         store.setProgress(0.45);
-        const hex = encrypted.ciphertext;
-        const payloadBytes = new Uint8Array(hex.length / 2);
-        for (let i = 0; i < payloadBytes.length; i++) {
-          payloadBytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-        }
+        // Use the validated `hexToBytes` helper instead of inline parseInt —
+        // a malformed bundle now throws a clear error instead of silently
+        // producing NaN-truncated bytes.
+        const payloadBytes = hexToBytes(encrypted.ciphertext);
 
+        // Compute the plaintext byte length AFTER encryption so the value
+        // matches what was actually fed into the worker (no risk of
+        // divergence from whitespace normalization or form trimming).
         const plaintextByteLength = new TextEncoder().encode(message).length;
 
         store.setProgress(0.65);
@@ -250,16 +256,32 @@ export function EncryptPage() {
               <Label htmlFor="pw">
                 Password <span className="text-[#fca5a5]/80">*</span>
               </Label>
-              <Input
-                id="pw"
-                type="password"
-                placeholder="Min. 8 characters"
-                autoComplete="new-password"
-                aria-required="true"
-                aria-invalid={!!errors.password}
-                aria-describedby={errors.password ? "pw-error" : undefined}
-                {...register("password")}
-              />
+              <div className="relative">
+                <Input
+                  id="pw"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Min. 8 characters"
+                  autoComplete="new-password"
+                  aria-required="true"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? "pw-error" : undefined}
+                  className="pr-10"
+                  {...register("password")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded text-white/40 hover:text-white/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan/50"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p
                   id="pw-error"

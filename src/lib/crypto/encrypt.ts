@@ -122,9 +122,16 @@ export async function decrypt(options: DecryptOptions): Promise<DecryptedPayload
     );
     const plaintext = new TextDecoder().decode(decrypted);
     return { plaintext, algorithm: "AES-256-GCM" };
-  } catch {
-    // Do not include `cause` here: any inner DOMException stays in this scope.
-    throw new Error("Decryption failed - incorrect password or corrupted data.");
+  } catch (err) {
+    // AES-GCM auth failure is the expected failure mode for a wrong
+    // password. Anything else (corrupted input, browser bug) is
+    // unexpected and should be surfaced differently so users can
+    // distinguish "wrong password" from "your bundle is broken".
+    if (err instanceof DOMException && err.name === "OperationError") {
+      throw new Error("Decryption failed - incorrect password or corrupted data.");
+    }
+    const msg = err instanceof Error ? err.message : "Unknown decryption error.";
+    throw new Error(`Decryption failed: ${msg}`);
   }
 }
 
