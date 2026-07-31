@@ -48,17 +48,25 @@ describe("regression: CRIT-1 unicode plaintext", () => {
     expect(decrypted.plaintext).toBe(plaintext);
   });
 
-  it("encrypts the same message multiple times — all ciphertexts are unique (no salt/IV reuse)", async () => {
-    const seen = new Set<string>();
-    for (let i = 0; i < 10; i++) {
-      const { ciphertext } = await encrypt({
-        plaintext: "same message",
-        password: "samepw",
-      });
-      seen.add(ciphertext);
-    }
-    expect(seen.size).toBe(10);
-  });
+  it(
+    "encrypts the same message multiple times — all ciphertexts are unique (no salt/IV reuse)",
+    async () => {
+      // 10 sequential encrypts, each doing PBKDF2-SHA512 at 600,000 iterations.
+      // This is intentionally expensive — it's the cost of the KDF we use for
+      // every encrypt. On a slow CI runner this can exceed Vitest's default
+      // 5s timeout. Give it headroom.
+      const seen = new Set<string>();
+      for (let i = 0; i < 10; i++) {
+        const { ciphertext } = await encrypt({
+          plaintext: "same message",
+          password: "samepw",
+        });
+        seen.add(ciphertext);
+      }
+      expect(seen.size).toBe(10);
+    },
+    30_000,
+  );
 
   it("decrypts a corrupted ciphertext (truncated by 5 bytes) — throws", async () => {
     const encrypted = await encrypt({ plaintext: "hello", password: "pw-1" });
