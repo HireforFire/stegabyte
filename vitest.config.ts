@@ -18,10 +18,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
-      "./wasm/pkg/stegabyte_stego_core.js": resolve(
-        __dirname,
-        "./tests/unit/wasm-bindings.stub.ts",
-      ),
     },
   },
 });

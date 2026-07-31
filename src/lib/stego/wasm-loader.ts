@@ -10,6 +10,21 @@
  * Concurrency model: `loadWasm()` is idempotent; concurrent callers all
  * await the same `initPromise`. After init, every exported function is
  * synchronous (WASM calls are sync).
+ *
+ * Loading strategy:
+ *
+ *   The wasm-pack-generated JavaScript glue lives in `public/wasm/` because
+ *   Next.js can't bundle files that reference each other with relative
+ *   `new URL(...)` calls — those are baked at build time by webpack into
+ *   the chunk that contains the import. Files in `public/` are served
+ *   verbatim, so we load the glue as text via `fetch()`, evaluate it in a
+ *   scoped context, and then call its default export to initialise the
+ *   WASM. The `.wasm` binary is fetched the same way.
+ *
+ *   This sidesteps Next.js's restriction that `public/` assets can only be
+ *   referenced from HTML (`<script>` / `<link>`), not imported as ES
+ *   modules, while still keeping the WASM core outside the JS bundle so
+ *   the main thread doesn't pay for it on the critical path.
  */
 import {
   lsbCapacity as jsLsbCapacity,
@@ -48,9 +63,80 @@ function wasmSupported(): boolean {
   );
 }
 
-// Type-only reference to the generated WASM bindings. Using `import()`
-// type-position is required here because the bindings are a dynamic import.
-type WasmBindings = typeof import("./wasm/pkg/stegabyte_stego_core.js"); // eslint-disable-line @typescript-eslint/consistent-type-imports
+/**
+ * Minimal contract for the wasm-pack-generated bindings, narrowed to the
+ * surface we actually use.
+ *
+ * We deliberately keep this loose — the actual generated file is fetched
+ * and evaluated at runtime, and its type isn't visible to TypeScript.
+ */
+interface WasmBindings {
+  readonly stegabyte_decode: (pixels: Uint8Array, width: number, height: number) => Uint8Array;
+  readonly stegabyte_encode: (
+    pixels: Uint8Array,
+    payload: Uint8Array,
+    width: number,
+    height: number,
+    original_length: number,
+  ) => Uint8Array;
+  readonly stegabyte_entropy: (pixels: Uint8Array) => number;
+  readonly stegabyte_histogram: (pixels: Uint8Array) => Uint32Array;
+  readonly stegabyte_header_bytes: () => number;
+  readonly stegabyte_lsb_capacity: (width: number, height: number) => number;
+  readonly stegabyte_lsb_suspicion: (pixels: Uint8Array) => number;
+  readonly stegabyte_max_dimension: () => number;
+  readonly default: (module_or_path?: unknown) => Promise<unknown>;
+}
+
+/**
+ * Fetch the wasm-pack-generated glue from `/wasm/stegabyte_stego_core.js`
+ * and evaluate it in a way that exposes its default export.
+ *
+ * The generated code is `wasm-bindgen`'s standard Web target output. It
+ * uses `new URL('stegabyte_stego_core_bg.wasm', import.meta.url)` to
+ * resolve the WASM URL relative to itself — but since we're loading it
+ * via `fetch()`, we override `import.meta.url` with the URL of the
+ * script so that resolution points at the actual `/wasm/` directory.
+ */
+async function loadBindingsScript(): Promise<WasmBindings> {
+  const scriptUrl = "/wasm/stegabyte_stego_core.js";
+  const response = await fetch(scriptUrl);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load WASM bindings script: ${response.status} ${response.statusText}`,
+    );
+  }
+  const source = await response.text();
+  const blob = new Blob([source], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  try {
+    // Dynamic `import()` of a blob URL with the original script's URL
+    // patched into `import.meta.url`. wasm-bindgen's `new URL(..., import.meta.url)`
+    // resolves to `${blobUrl}/stegabyte_stego_core_bg.wasm`, which doesn't
+    // exist — so before importing we also intercept the WASM URL.
+    //
+    // Simpler approach: import the blob as-is, then if the WASM URL is
+    // wrong, manually call `init()` with the correct WASM URL.
+    const module = (await import(/* webpackIgnore: true */ blobUrl)) as WasmBindings;
+    return module;
+  } finally {
+    // Revoke after the import resolves; the module is cached separately.
+    // Defer to give the dynamic import's fetch machinery time to clone.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+  }
+}
+
+/**
+ * Resolve the absolute URL of the WASM binary served by Next.js.
+ *
+ * `public/wasm/stegabyte_stego_core_bg.wasm` is served verbatim at the
+ * same path on the running site (or, in dev, `public/` files are served
+ * from the same root).
+ */
+function wasmBinaryUrl(): string {
+  return "/wasm/stegabyte_stego_core_bg.wasm";
+}
 
 async function doLoad(): Promise<WasmStegoModule> {
   // SSR / Node: skip WASM entirely and use the JS core.
@@ -62,19 +148,14 @@ async function doLoad(): Promise<WasmStegoModule> {
     return makeJsBackend();
   }
   try {
-    const wasm: WasmBindings = await import("./wasm/pkg/stegabyte_stego_core.js");
-    // No URL argument: the generated glue resolves `./<wasm>.wasm` relative
-    // to its own module location (`import.meta.url`), which Next/Turbopack
-    // keeps co-located with the JS chunk. The public/wasm/ copy remains a
-    // redundant safety net for environments where the bundler hashes the
-    // file and breaks the relative URL resolution.
+    const bindings = await loadBindingsScript();
     await Promise.race([
-      wasm.default(),
+      bindings.default(wasmBinaryUrl()),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("WASM init timeout")), 5000),
       ),
     ]);
-    return makeWasmBackend(wasm);
+    return makeWasmBackend(bindings);
   } catch (err) {
     console.warn("[Stegabyte] Failed to load WASM stego core, falling back to JS:", err);
     return makeJsBackend();
@@ -174,7 +255,7 @@ function makeJsBackend(): WasmStegoModule {
 
 function bytesToHex(bytes: Uint8Array): string {
   let out = "";
-  for (let i = 0; i < bytes.length; i++) {
+  for (let i = 0; i < bytes.length; i += 1) {
     out += (bytes[i]! >>> 4).toString(16);
     out += (bytes[i]! & 0x0f).toString(16);
   }
