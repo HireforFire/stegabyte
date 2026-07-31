@@ -135,6 +135,7 @@ export function CommandPalette({ open, onClose, anchorRef }: CommandPaletteProps
         e.preventDefault();
         setActive((a) => Math.max(0, a - 1));
       } else if (e.key === "Enter") {
+        e.preventDefault();
         const item = filtered[active];
         if (item) go(item.href);
       }

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { MotionConfig } from "framer-motion";
 import { Sidebar, MobileNav } from "@/components/layout/sidebar";
 import { Navbar } from "@/components/layout/navbar";
 import { WasmStegoPriming } from "@/components/layout/wasm-stego-priming";
@@ -71,24 +72,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-black/80 focus:px-3 focus:py-2 focus:text-[11px] focus:uppercase focus:tracking-[0.2em] focus:text-white/80"
-        >
-          Skip to content
-        </a>
-        <div className="relative flex min-h-screen">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Navbar />
-            <main id="main" className="relative flex-1 pb-24 lg:pb-10">
-              {children}
-            </main>
+        {/*
+         * `reducedMotion="user"` makes framer-motion honour the OS
+         * `prefers-reduced-motion` setting for every <motion.*> component
+         * across the app. The CSS rule in globals.css handles the
+         * non-React (Tailwind) transitions; this provider covers the
+         * rest.
+         */}
+        <MotionConfig reducedMotion="user">
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-black/80 focus:px-3 focus:py-2 focus:text-[11px] focus:uppercase focus:tracking-[0.2em] focus:text-white/80"
+          >
+            Skip to content
+          </a>
+          <div className="relative flex min-h-screen">
+            <Sidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Navbar />
+              <main id="main" className="relative flex-1 pb-24 lg:pb-10">
+                {children}
+              </main>
+            </div>
           </div>
-        </div>
-        <MobileNav />
-        <WasmStegoPriming />
-        <Toaster />
+          <MobileNav />
+          <WasmStegoPriming />
+          <Toaster />
+        </MotionConfig>
       </body>
     </html>
   );

@@ -317,11 +317,21 @@ export function EncryptPage() {
             exit={{ opacity: 0, y: 4 }}
             role="status"
             aria-live="polite"
+            ref={(el) => {
+              // After the result appears, move focus to the heading so SR
+              // users hear the success state without tabbing forward. The
+              // tabIndex={-1} makes the heading focusable without putting
+              // it in the tab order.
+              if (el) {
+                (el as unknown as HTMLElement).tabIndex = -1;
+                (el as unknown as HTMLElement).focus({ preventScroll: true });
+              }
+            }}
           >
             <GlassPanel tint="cyan" className="p-6 md:p-8">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <TechLabel color="cyan">Encryption Complete</TechLabel>
-                <ShieldCheck className="h-5 w-5 text-[#67e8f4]/70" />
+                <ShieldCheck aria-hidden className="h-5 w-5 text-[#67e8f4]/70" />
               </div>
               <p className="mb-5 text-sm leading-relaxed text-white/40">
                 {formatBytes(store.capacityUsed)} used of{" "}
