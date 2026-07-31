@@ -49,16 +49,25 @@ const exists = async (p) => {
 };
 
 if (!(await exists(SRC))) {
-  console.error(
+  console.warn(
     `[copy-wasm] Source directory missing: ${SRC}\n` +
-      "Run `npm run wasm:build` first to produce the artefacts.",
+      "This is expected in CI (no Rust toolchain). The build will use the\n" +
+      "WASM artefacts already committed to `public/wasm/` instead.\n" +
+      "Run `npm run wasm:build` locally to refresh them after editing the\n" +
+      "Rust crate.",
   );
-  process.exit(1);
+  // Exit early WITHOUT clearing `public/wasm/`. The committed artefacts
+  // remain in place so `next build` can bundle them.
+  process.exit(0);
 }
 
+// If the wasm-pack output exists, copy it over the committed artefacts.
+// We still `rm` DEST first because the source is the source of truth
+// after a local rebuild. CI never hits this branch.
 await rm(DEST, { recursive: true, force: true });
 await mkdir(DEST, { recursive: true });
 
+let copiedAny = false;
 for (const f of FILES) {
   const from = join(SRC, f);
   if (!(await exists(from))) continue;
@@ -83,7 +92,15 @@ for (const f of FILES) {
   }
 
   await cp(from, join(DEST, f));
+  copiedAny = true;
   console.log(`[copy-wasm] copied ${f}`);
+}
+
+if (!copiedAny) {
+  console.warn(
+    `[copy-wasm] Source directory ${SRC} exists but is empty.\n` +
+      "Falling back to whatever is already in `public/wasm/`.",
+  );
 }
 
 console.log("[copy-wasm] done");
