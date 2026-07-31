@@ -1,0 +1,32 @@
+[package]
+name = "stegabyte-stego-core"
+version = "1.0.0"
+edition = "2021"
+authors = ["Stegabyte Contributors"]
+description = "PNG LSB stego core compiled to WebAssembly"
+license = "MIT"
+repository = "https://github.com/HireforFire/stegabyte"
+publish = false
+
+[package.metadata.wasm-pack.profile.release]
+# Disable wasm-opt: the bundled binary doesn't recognise bulk-memory ops that
+# Rust 1.94+ emits. Rust's own -C opt-level=z is already aggressive enough.
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = { version = "0.1", optional = true }
+js-sys = "0.3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

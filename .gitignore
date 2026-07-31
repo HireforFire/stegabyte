@@ -1,0 +1,51 @@
+﻿# dependencies
+node_modules/
+
+# build artifacts
+.next/
+out/
+build/
+dist/
+
+# coverage / test reports
+coverage/
+playwright-report/
+test-results/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+smoke-test-logs/
+
+# environment / secrets
+.env
+.env.local
+.env.*.local
+
+# vercel
+.vercel/
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# rust / wasm
+crates/**/target/
+# Cargo.lock is committed (Rust convention for binaries/libraries)
+src/lib/stego/wasm/pkg/
+
+# temp / scratch
+tmp/
+.tmp/
+.cache/
+smoke-test*.ps1

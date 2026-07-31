@@ -1,0 +1,24 @@
+{
+  "name": "stegabyte-stego-core",
+  "type": "module",
+  "collaborators": [
+    "Stegabyte Contributors"
+  ],
+  "description": "PNG LSB stego core compiled to WebAssembly",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HireforFire/stegabyte"
+  },
+  "files": [
+    "stegabyte_stego_core_bg.wasm",
+    "stegabyte_stego_core.js",
+    "stegabyte_stego_core.d.ts"
+  ],
+  "main": "stegabyte_stego_core.js",
+  "types": "stegabyte_stego_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

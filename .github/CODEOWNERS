@@ -1,0 +1,6 @@
+# CODEOWNERS
+# All changes to Stegabyte require review by the project maintainers.
+# Maintainers are listed in the GitHub organisation team; the file
+# itself does not identify any natural person.
+
+* @HireforFire

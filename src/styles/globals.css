@@ -1,0 +1,408 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --indigo: #6366f1;
+    --indigo-rgb: 99, 102, 241;
+    --cyan: #06b6d4;
+    --cyan-rgb: 6, 182, 212;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --crimson: #ef4444;
+
+    --radius: 0.5rem;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: #fff;
+    font-family:
+      var(--font-sans),
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+    font-weight: 300;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Lenis-style smooth scroll */
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  .lenis.lenis-stopped {
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: rgba(var(--indigo-rgb), 0.3);
+    color: #fff;
+  }
+
+  /* Subtle indigo + cyan ambient — much darker than before, matches PortfolioSite's pure black */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(40% 35% at 12% 8%, rgba(99, 102, 241, 0.06), transparent 60%),
+      radial-gradient(35% 30% at 92% 18%, rgba(6, 182, 212, 0.05), transparent 60%),
+      radial-gradient(45% 40% at 50% 100%, rgba(99, 102, 241, 0.04), transparent 60%);
+    pointer-events: none;
+  }
+
+  /* Faint film grain overlay for depth */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    opacity: 0.4;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  /* Scrollbar (matches PortfolioSite 3px) */
+  ::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Prevent tap highlight */
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Focus ring (subtle, white-based) */
+  :focus-visible {
+    outline: 1px solid rgba(255, 255, 255, 0.3);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Mobile viewport fix */
+  @supports (height: 100dvh) {
+    body {
+      min-height: 100dvh;
+    }
+  }
+
+  /* Hide scrollbar on touch devices */
+  @media (hover: none) and (pointer: coarse) {
+    ::-webkit-scrollbar {
+      width: 0;
+    }
+  }
+}
+
+@layer components {
+  /* Liquid glass panel — the centerpiece. Matches PortfolioSite's box-shadow layered glow. */
+  .glass-panel {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.5rem;
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    box-shadow:
+      0 0 60px rgba(255, 255, 255, 0.06),
+      0 0 120px rgba(99, 102, 241, 0.08),
+      inset 0 0 60px rgba(255, 255, 255, 0.02);
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+
+  .glass-panel:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Indigo-tinted glass — for primary surfaces */
+  .glass-panel-indigo {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 0.5rem;
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    box-shadow:
+      0 0 60px rgba(255, 255, 255, 0.06),
+      0 0 120px rgba(99, 102, 241, 0.12),
+      inset 0 0 60px rgba(255, 255, 255, 0.02);
+  }
+
+  /* Cyan-tinted glass — for secondary surfaces */
+  .glass-panel-cyan {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(6, 182, 212, 0.15);
+    border-radius: 0.5rem;
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    box-shadow:
+      0 0 60px rgba(255, 255, 255, 0.06),
+      0 0 120px rgba(6, 182, 212, 0.1),
+      inset 0 0 60px rgba(255, 255, 255, 0.02);
+  }
+
+  /* Tech input — matches PortfolioSite FormField */
+  .tech-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    outline: none;
+    transition:
+      border-color 0.3s ease,
+      background-color 0.3s ease;
+    font-family: inherit;
+  }
+
+  .tech-input::placeholder {
+    color: rgba(255, 255, 255, 0.15);
+  }
+
+  .tech-input:focus {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .tech-input:focus-visible {
+    outline: none;
+  }
+
+  textarea.tech-input {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+
+  /* Tech label — uppercase tracked */
+  .tech-label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.25);
+    margin-bottom: 0.5rem;
+    font-weight: 400;
+  }
+
+  /* Tech button — matches PortfolioSite hover style */
+  .tech-button {
+    position: relative;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 0.5rem;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+    transition:
+      border-color 0.3s ease,
+      background-color 0.3s ease,
+      color 0.3s ease;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 400;
+  }
+
+  .tech-button:hover:not(:disabled) {
+    color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .tech-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Tech button — primary (indigo accent) */
+  .tech-button-primary {
+    composes: tech-button;
+  }
+  .tech-button-primary,
+  .tech-button.tech-button-primary {
+    border-color: rgba(99, 102, 241, 0.3);
+    color: rgba(165, 170, 255, 0.7);
+  }
+  .tech-button-primary:hover:not(:disabled) {
+    border-color: rgba(99, 102, 241, 0.5);
+    color: rgba(165, 170, 255, 1);
+    background: rgba(99, 102, 241, 0.06);
+  }
+
+  /* Tech button — secondary (cyan accent) */
+  .tech-button.tech-button-cyan {
+    border-color: rgba(6, 182, 212, 0.3);
+    color: rgba(103, 232, 244, 0.7);
+  }
+  .tech-button.tech-button-cyan:hover:not(:disabled) {
+    border-color: rgba(6, 182, 212, 0.5);
+    color: rgba(103, 232, 244, 1);
+    background: rgba(6, 182, 212, 0.06);
+  }
+
+  /* Glow text — matches PortfolioSite drop-shadow */
+  .glow-text {
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5))
+      drop-shadow(0 0 40px rgba(255, 255, 255, 0.2));
+  }
+
+  .glow-text-indigo {
+    filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.5))
+      drop-shadow(0 0 40px rgba(99, 102, 241, 0.25));
+  }
+
+  .glow-text-cyan {
+    filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.5))
+      drop-shadow(0 0 40px rgba(6, 182, 212, 0.25));
+  }
+
+  /* Tech divider with accent line */
+  .tech-divider {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%
+    );
+  }
+
+  .tech-divider-indigo {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(99, 102, 241, 0.3) 50%,
+      transparent 100%
+    );
+  }
+
+  /* Tech accent dot */
+  .tech-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.4);
+  }
+
+  .tech-dot-cyan {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(6, 182, 212, 0.4);
+  }
+
+  /* Status pill */
+  .tech-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 9999px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 400;
+  }
+
+  .tech-pill-indigo {
+    border-color: rgba(99, 102, 241, 0.25);
+    color: rgba(165, 170, 255, 0.6);
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  .tech-pill-cyan {
+    border-color: rgba(6, 182, 212, 0.25);
+    color: rgba(103, 232, 244, 0.6);
+    background: rgba(6, 182, 212, 0.05);
+  }
+
+  .tech-pill-emerald {
+    border-color: rgba(16, 185, 129, 0.25);
+    color: rgba(110, 231, 183, 0.7);
+    background: rgba(16, 185, 129, 0.05);
+  }
+
+  .tech-pill-amber {
+    border-color: rgba(245, 158, 11, 0.25);
+    color: rgba(252, 211, 77, 0.7);
+    background: rgba(245, 158, 11, 0.05);
+  }
+
+  .tech-pill-crimson {
+    border-color: rgba(239, 68, 68, 0.25);
+    color: rgba(252, 165, 165, 0.7);
+    background: rgba(239, 68, 68, 0.05);
+  }
+}
+
+@layer utilities {
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* No scrollbar utility */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
