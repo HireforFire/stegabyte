@@ -26,6 +26,22 @@ if (typeof window !== "undefined" && !window.matchMedia) {
     }) as unknown as MediaQueryList;
 }
 
+// Polyfill Blob.prototype.arrayBuffer for jsdom (the bundled Blob
+// implementation pre-dates the arrayBuffer method on some Node versions,
+// and our PNG sniffer uses it to read the first 26 bytes of an
+// uploaded file). The polyfill is a no-op when the method already
+// exists, so it's safe to install unconditionally.
+if (typeof Blob !== "undefined" && !Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error ?? new Error("FileReader error"));
+      reader.readAsArrayBuffer(this);
+    });
+  };
+}
+
 // Avoid noisy console.error from jsdom's missing implementations.
 const originalError = console.error;
 console.error = (...args: unknown[]) => {

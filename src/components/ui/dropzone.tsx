@@ -185,6 +185,9 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
+      // Ignore key auto-repeat: holding Enter/Space would otherwise re-open
+      // the native picker dialog repeatedly.
+      if (e.repeat) return;
       e.preventDefault();
       // Prefer native picker when available; falls back to <input> internally.
       if (nativeSupported) {

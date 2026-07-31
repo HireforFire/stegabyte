@@ -149,10 +149,11 @@ export function decodePngLsb(
   const payloadLength = hv.getUint32(6, true);
   const originalLength = hv.getUint32(10, true);
 
-  // DoS guard: clamp payloadLength to a sane upper bound before allocating.
-  const saneMax = Math.min(payloadLength, MAX_PAYLOAD_LENGTH_BYTES);
-  const effectivePayloadLength = payloadLength === saneMax ? saneMax : 0;
-  if (effectivePayloadLength !== payloadLength) {
+  // DoS guard: reject payloadLength values above the maximum a valid
+  // image of MAX_DIMENSION x MAX_DIMENSION could carry. Rejecting the
+  // legal maximum itself was the inverted-clamp bug from v1.0; we now
+  // reject strictly-greater values.
+  if (payloadLength > MAX_PAYLOAD_LENGTH_BYTES) {
     throw new Error("Corrupt header: payload length exceeds reasonable bounds.");
   }
 

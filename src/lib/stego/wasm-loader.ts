@@ -13,18 +13,21 @@
  *
  * Loading strategy:
  *
- *   The wasm-pack-generated JavaScript glue lives in `public/wasm/` because
- *   Next.js can't bundle files that reference each other with relative
- *   `new URL(...)` calls — those are baked at build time by webpack into
- *   the chunk that contains the import. Files in `public/` are served
- *   verbatim, so we load the glue as text via `fetch()`, evaluate it in a
- *   scoped context, and then call its default export to initialise the
- *   WASM. The `.wasm` binary is fetched the same way.
+ *   1. Fetch the `.wasm` binary directly and compile it to a
+ *      `WebAssembly.Module` ahead of time.
+ *   2. Fetch the wasm-bindgen-generated glue (`stegabyte_stego_core.js`)
+ *      and evaluate it inside a Blob URL — the same dynamic-import path
+ *      that v1.0 used, but we now skip the glue's own URL-resolution
+ *      branch by passing the precompiled module.
+ *   3. Call `bindings.default({ module })`, which bypasses the
+ *      `new URL('...wasm', import.meta.url)` lookup entirely (that lookup
+ *      would otherwise resolve to a `blob:` URL, where the WASM file
+ *      doesn't exist).
  *
- *   This sidesteps Next.js's restriction that `public/` assets can only be
- *   referenced from HTML (`<script>` / `<link>`), not imported as ES
- *   modules, while still keeping the WASM core outside the JS bundle so
- *   the main thread doesn't pay for it on the critical path.
+ *   This was the architectural bug in v1.0: blob-importing the glue made
+ *   `import.meta.url` a `blob:https://…` URL, so the glue's WASM fetch
+ *   landed on a 404 every time. The fallback to JS then fired after a
+ *   5 s timeout and a noisy console warning, on every cold load.
  */
 import {
   lsbCapacity as jsLsbCapacity,
@@ -59,16 +62,16 @@ let initPromise: Promise<WasmStegoModule> | null = null;
 
 function wasmSupported(): boolean {
   return (
-    typeof WebAssembly !== "undefined" && typeof WebAssembly.instantiate === "function"
+    typeof WebAssembly !== "undefined" &&
+    typeof WebAssembly.instantiate === "function" &&
+    typeof WebAssembly.compile === "function"
   );
 }
 
 /**
  * Minimal contract for the wasm-pack-generated bindings, narrowed to the
- * surface we actually use.
- *
- * We deliberately keep this loose — the actual generated file is fetched
- * and evaluated at runtime, and its type isn't visible to TypeScript.
+ * surface we actually use. The actual generated file is fetched and
+ * evaluated at runtime — its type isn't visible to TypeScript.
  */
 interface WasmBindings {
   readonly stegabyte_decode: (pixels: Uint8Array, width: number, height: number) => Uint8Array;
@@ -85,22 +88,41 @@ interface WasmBindings {
   readonly stegabyte_lsb_capacity: (width: number, height: number) => number;
   readonly stegabyte_lsb_suspicion: (pixels: Uint8Array) => number;
   readonly stegabyte_max_dimension: () => number;
-  readonly default: (module_or_path?: unknown) => Promise<unknown>;
+  readonly default: (initArg: { module: WebAssembly.Module }) => Promise<unknown>;
+}
+
+const WASM_SCRIPT_URL = "/wasm/stegabyte_stego_core.js";
+const WASM_BINARY_URL = "/wasm/stegabyte_stego_core_bg.wasm";
+
+/**
+ * Fetch the WASM binary and compile it ahead of time. Doing the
+ * `compile()` here (rather than letting the bindings do an `instantiate`
+ * which includes compilation) means we fail fast if the bytes are
+ * missing or corrupt — instead of paying a 5 s `await` inside the
+ * bindings before falling back to JS.
+ */
+async function fetchWasmModule(): Promise<WebAssembly.Module> {
+  const response = await fetch(WASM_BINARY_URL);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load WASM binary: ${response.status} ${response.statusText}`,
+    );
+  }
+  const bytes = await response.arrayBuffer();
+  return WebAssembly.compile(bytes);
 }
 
 /**
- * Fetch the wasm-pack-generated glue from `/wasm/stegabyte_stego_core.js`
- * and evaluate it in a way that exposes its default export.
+ * Fetch the wasm-bindgen-generated glue and import it as an ES module.
  *
- * The generated code is `wasm-bindgen`'s standard Web target output. It
- * uses `new URL('stegabyte_stego_core_bg.wasm', import.meta.url)` to
- * resolve the WASM URL relative to itself — but since we're loading it
- * via `fetch()`, we override `import.meta.url` with the URL of the
- * script so that resolution points at the actual `/wasm/` directory.
+ * The glue contains `new URL("stegabyte_stego_core_bg.wasm", import.meta.url)`
+ * but we bypass that branch by passing a precompiled module to
+ * `bindings.default({ module })`. The blob URL is only used to evaluate
+ * the glue code; nothing inside it fetches anything based on the blob
+ * origin.
  */
 async function loadBindingsScript(): Promise<WasmBindings> {
-  const scriptUrl = "/wasm/stegabyte_stego_core.js";
-  const response = await fetch(scriptUrl);
+  const response = await fetch(WASM_SCRIPT_URL);
   if (!response.ok) {
     throw new Error(
       `Failed to load WASM bindings script: ${response.status} ${response.statusText}`,
@@ -109,33 +131,14 @@ async function loadBindingsScript(): Promise<WasmBindings> {
   const source = await response.text();
   const blob = new Blob([source], { type: "application/javascript" });
   const blobUrl = URL.createObjectURL(blob);
-
   try {
-    // Dynamic `import()` of a blob URL with the original script's URL
-    // patched into `import.meta.url`. wasm-bindgen's `new URL(..., import.meta.url)`
-    // resolves to `${blobUrl}/stegabyte_stego_core_bg.wasm`, which doesn't
-    // exist — so before importing we also intercept the WASM URL.
-    //
-    // Simpler approach: import the blob as-is, then if the WASM URL is
-    // wrong, manually call `init()` with the correct WASM URL.
     const module = (await import(/* webpackIgnore: true */ blobUrl)) as WasmBindings;
     return module;
   } finally {
-    // Revoke after the import resolves; the module is cached separately.
-    // Defer to give the dynamic import's fetch machinery time to clone.
+    // Defer the revoke until after the import promise settles so the
+    // glue's first reference doesn't see a revoked URL.
     setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
   }
-}
-
-/**
- * Resolve the absolute URL of the WASM binary served by Next.js.
- *
- * `public/wasm/stegabyte_stego_core_bg.wasm` is served verbatim at the
- * same path on the running site (or, in dev, `public/` files are served
- * from the same root).
- */
-function wasmBinaryUrl(): string {
-  return "/wasm/stegabyte_stego_core_bg.wasm";
 }
 
 async function doLoad(): Promise<WasmStegoModule> {
@@ -148,16 +151,21 @@ async function doLoad(): Promise<WasmStegoModule> {
     return makeJsBackend();
   }
   try {
-    const bindings = await loadBindingsScript();
+    const [bindings, module] = await Promise.all([
+      loadBindingsScript(),
+      fetchWasmModule(),
+    ]);
     await Promise.race([
-      bindings.default(wasmBinaryUrl()),
+      bindings.default({ module }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("WASM init timeout")), 5000),
       ),
     ]);
     return makeWasmBackend(bindings);
   } catch (err) {
-    console.warn("[Stegabyte] Failed to load WASM stego core, falling back to JS:", err);
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[Stegabyte] Failed to load WASM stego core, falling back to JS:", err);
+    }
     return makeJsBackend();
   }
 }
@@ -196,10 +204,16 @@ function makeWasmBackend(mod: WasmBindings): WasmStegoModule {
         height,
         originalLength,
       );
-      // capacityUsed/usedInThisCall is not separately returned by WASM;
-      // approximate by total capacity minus remaining bits.
+      // v1.0 conflated capacityUsed with capacityTotal, which made the
+      // CapacityMeter report "100% used" for every encode. Now we
+      // derive capacityUsed from the byte count the encoder actually
+      // wrote (HEADER_BYTES + payload.length in bits, divided by 8).
+      // The WASM core doesn't return this directly, so we recompute it
+      // on the JS side — same arithmetic the JS core uses internally.
+      const HEADER_BYTES = mod.stegabyte_header_bytes();
+      const totalBits = (HEADER_BYTES + payload.byteLength) * 8;
       const capacityTotal = mod.stegabyte_lsb_capacity(width, height);
-      const capacityUsed = capacityTotal;
+      const capacityUsed = Math.min(totalBits, capacityTotal);
       return { outPixels, capacityUsed, capacityTotal };
     },
     decode(pixels, width, height) {

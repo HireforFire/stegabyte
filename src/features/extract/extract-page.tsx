@@ -163,41 +163,51 @@ export function ExtractPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <DropZone
-            accept="image/png"
-            onFile={handleFile}
-            fileName={fileName ?? undefined}
-            onClear={handleClear}
-            preview={
-              previewUrl ? <ImagePreview src={previewUrl} alt="Stego preview" /> : null
-            }
-          />
-
-          <div className="space-y-2">
-            <Label htmlFor="extract-pw">
-              Password <span className="text-[#fca5a5]/80">*</span>
-            </Label>
-            <Input
-              id="extract-pw"
-              type="password"
-              placeholder="Min. 8 characters"
-              autoComplete="current-password"
-              aria-required="true"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <PasswordStrength password={password} />
-          </div>
-
-          <TechButton
-            variant="cyan"
-            disabled={!imageBuffer || loading}
-            onClick={handleExtract}
-            icon={<Unlock className="h-4 w-4" />}
-            className="w-full"
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleExtract();
+            }}
+            aria-busy={loading}
           >
-            Extract & Decrypt
-          </TechButton>
+            <DropZone
+              accept="image/png"
+              onFile={handleFile}
+              fileName={fileName ?? undefined}
+              onClear={handleClear}
+              preview={
+                previewUrl ? <ImagePreview src={previewUrl} alt="Stego preview" /> : null
+              }
+            />
+
+            <div className="space-y-2">
+              <Label htmlFor="extract-pw">
+                Password <span className="text-[#fca5a5]/80">*</span>
+              </Label>
+              <Input
+                id="extract-pw"
+                type="password"
+                placeholder="Min. 8 characters"
+                autoComplete="current-password"
+                aria-required="true"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
+              <PasswordStrength password={password} />
+            </div>
+
+            <TechButton
+              type="submit"
+              variant="cyan"
+              disabled={!imageBuffer || loading}
+              loading={loading}
+              icon={<Unlock className="h-4 w-4" />}
+              className="w-full"
+            >
+              Extract & Decrypt
+            </TechButton>
+          </form>
         </CardContent>
       </Card>
 
