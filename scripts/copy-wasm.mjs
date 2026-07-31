@@ -12,6 +12,7 @@
  */
 import process from "node:process";
 import { cp, mkdir, rm, access, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -61,9 +62,22 @@ if (!(await exists(SRC))) {
   process.exit(0);
 }
 
-// If the wasm-pack output exists, copy it over the committed artefacts.
-// We still `rm` DEST first because the source is the source of truth
-// after a local rebuild. CI never hits this branch.
+// Sanity check: all five files must exist in the wasm-pack output before
+// we treat it as authoritative. If anything is missing, fall back to the
+// committed `public/wasm/` artefacts (which CI relies on when the Rust
+// toolchain is absent).
+const missingInSrc = FILES.filter((f) => !existsSync(join(SRC, f)));
+if (missingInSrc.length > 0) {
+  console.warn(
+    `[copy-wasm] Source directory ${SRC} is missing:\n` +
+      missingInSrc.map((f) => `  - ${f}`).join("\n") +
+      "\nFalling back to the WASM artefacts already in `public/wasm/`.",
+  );
+  process.exit(0);
+}
+
+// All source files exist — clear the destination and copy fresh ones.
+// CI never hits this branch because `wasm:build` is not run there.
 await rm(DEST, { recursive: true, force: true });
 await mkdir(DEST, { recursive: true });
 
