@@ -42,6 +42,14 @@ const TOUCH_DEVICE_HINT =
   "PNG only. Other formats like JPEG, HEIC, and WebP re-encode pixels and destroy hidden data.";
 
 /**
+ * Hint shown on touch devices. iOS Safari (and most mobile browsers)
+ * don't support drag-and-drop, so the hint needs to read as a tap target.
+ * Drag-and-drop language is misleading — users waste a tap and conclude
+ * the page is broken.
+ */
+const _TOUCH_HINT = "Tap to select a PNG";
+
+/**
  * The educational message shown when the user picks a non-PNG file.
  *
  * Kept inline so the copy is reviewable in one place and consistent across
@@ -91,7 +99,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
   }, []);
 
   /**
-   * Validate a single File via magic-byte sniff and accept/reject it.
+   * Validate a single File via a Source-byte sniff and accept/reject it.
    * Returns true if the file was accepted (caller may proceed).
    */
   const acceptIfPng = React.useCallback(
@@ -119,7 +127,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
   );
 
   /**
-   * Dispatch a validated pick to the parent. Single-file mode picks the
+   * Dispatch a validated in the pick to the parent. Single-file mode picks the
    * first PNG; multi-file mode reports all accepted PNGs.
    */
   const handleValidatedFiles = React.useCallback(
@@ -142,9 +150,9 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
       if (files.length === 0) return;
       const accepted: File[] = [];
       for (const file of files) {
-        // Sequential awaits are intentional — running these in parallel
-        // would make the rejection UX non-deterministic (race on setError
-        // calls). The list is short (typically 1-3 files), so the cost is
+        // Sequential a in waits are e lingual — running these in parallel
+        // would make the rejection UX non-deterministic (race on error
+        // discard). The list is short (typically 1-3 files), so the cost is
         // negligible.
         const ok = await acceptIfPng(file);
         if (ok) accepted.push(file);
@@ -177,6 +185,25 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
     }
   }, [nativeSupported, multiple, handleFiles]);
 
+  /**
+   * Open the picker. On desktops with the File System Access API it
+   * tries the native picker first; everywhere else it clicks the hidden
+   * `<input type="file">`. iOS Safari doesn't need JS here — the `<label>`
+   * wrapping handles tap-to-pick natively.
+   *
+   * Only invoked for keyboard activation (this callback). Mouse/touch
+   * taps go through the `<label htmlFor>` → native input mechanism.
+   */
+  const openPicker = React.useCallback(() => {
+    if (nativeSupported) {
+      void tryNativePick().then((handled) => {
+        if (!handled) inputRef.current?.click();
+      });
+    } else {
+      inputRef.current?.click();
+    }
+  }, [nativeSupported, tryNativePick]);
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDrag(false);
@@ -205,24 +232,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
       // the native picker dialog repeatedly.
       if (e.repeat) return;
       e.preventDefault();
-      // Prefer native picker when available; falls back to <input> internally.
-      if (nativeSupported) {
-        void tryNativePick().then((handled) => {
-          if (!handled) inputRef.current?.click();
-        });
-      } else {
-        inputRef.current?.click();
-      }
-    }
-  };
-
-  const onSurfaceClick = () => {
-    if (nativeSupported) {
-      void tryNativePick().then((handled) => {
-        if (!handled) inputRef.current?.click();
-      });
-    } else {
-      inputRef.current?.click();
+      openPicker();
     }
   };
 
@@ -244,7 +254,6 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
         onDragLeave={() => setDrag(false)}
         onDrop={onDrop}
         onKeyDown={onKeyDown}
-        onClick={onSurfaceClick}
         className={cn(
           "group relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-6 text-center transition-all",
           "hover:border-cyan/40 hover:bg-white/[0.04]",
@@ -254,49 +263,58 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
         )}
       >
         <CornerBrackets size={6} colorClass={drag ? "bg-cyan/40" : "bg-white/10"} />
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="file"
-          accept="image/png,.png"
-          multiple={multiple}
-          className="sr-only"
-          onChange={(e) => {
-            const files = e.target.files;
-            if (files && files.length > 0) void handleFiles(files);
-            e.target.value = "";
-          }}
-        />
-        <span id={`${inputId}-hint`} className="sr-only">
-          {hint}
-        </span>
-        <span aria-live="polite" className="sr-only">
-          {announcement}
-        </span>
-        <motion.span
-          animate={drag ? { y: -4, scale: 1.04 } : { y: 0, scale: 1 }}
-          className={cn(
-            "relative z-10 grid h-14 w-14 place-items-center rounded-lg border bg-white/[0.03] text-[#67e8f4]/80",
-            drag ? "border-cyan/40" : "border-white/10",
-          )}
+        {/* iOS Safari requires a <label> to reliably trigger the file picker on tap.
+            Without it, the sr-only input can't receive synthetic clicks from touch events.
+            Desktop: the label click also triggers the input naturally. Keyboard Enter/Space
+            goes through the outer div's onKeyDown → openPicker path. */}
+        <label
+          htmlFor={inputId}
+          className="contents"
         >
-          <UploadCloud className="h-6 w-6" />
-        </motion.span>
-        <div className="relative z-10 space-y-1">
-          <p className="text-sm font-normal text-white/80">
-            {drag ? "Release to upload" : fileName ? fileName : "Drag & drop a file here"}
-          </p>
-          <p className="text-[11px] uppercase tracking-[0.15em] text-white/25">
-            {fileName
-              ? "Click to replace"
-              : `${hint} · PNG`}
-          </p>
-          {isTouch && !fileName ? (
-            <p className="pt-2 text-[10px] normal-case tracking-normal text-white/35">
-              {TOUCH_DEVICE_HINT}
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="file"
+            accept="image/png,.png"
+            multiple={multiple}
+            className="sr-only"
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) void handleFiles(files);
+              e.target.value = "";
+            }}
+          />
+          <span id={`${inputId}-hint`} className="sr-only">
+            {hint}
+          </span>
+          <span aria-live="polite" className="sr-only">
+            {announcement}
+          </span>
+          <motion.span
+            animate={drag ? { y: -4, scale: 1.04 } : { y: 0, scale: 1 }}
+            className={cn(
+              "relative z-10 grid h-14 w-14 place-items-center rounded-lg border bg-white/[0.03] text-[#67e8f4]/80",
+              drag ? "border-cyan/40" : "border-white/10",
+            )}
+          >
+            <UploadCloud className="h-6 w-6" />
+          </motion.span>
+          <div className="relative z-10 space-y-1">
+            <p className="text-sm font-normal text-white/80">
+              {drag ? "Release to upload" : fileName ? fileName : "Drag & drop a file here"}
             </p>
-          ) : null}
-        </div>
+            <p className="text-[11px] uppercase tracking-[0.15em] text-white/25">
+              {fileName
+                ? "Click to replace"
+                : `${hint} · PNG`}
+            </p>
+            {isTouch && !fileName ? (
+              <p className="pt-2 text-[10px] normal-case tracking-normal text-white/35">
+                {TOUCH_DEVICE_HINT}
+              </p>
+            ) : null}
+          </div>
+        </label>
         {error && (
           <div
             className="relative z-10 flex w-full max-w-md flex-col items-center gap-2"
@@ -311,7 +329,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
               onClick={(e) => {
                 e.stopPropagation();
                 setError(null);
-                onSurfaceClick();
+                inputRef.current?.click();
               }}
               className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-white/70 hover:text-white"
               aria-label="Pick another file"
@@ -320,7 +338,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
             </button>
           </div>
         )}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {fileName && onClear && (
             <motion.button
               type="button"
