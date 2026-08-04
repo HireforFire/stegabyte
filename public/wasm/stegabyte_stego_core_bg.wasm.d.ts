@@ -1,23 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const stegabyte_decode: (
-  a: number,
-  b: number,
-  c: number,
-  d: number,
-  e: number,
-) => void;
-export const stegabyte_encode: (
-  a: number,
-  b: number,
-  c: number,
-  d: number,
-  e: number,
-  f: number,
-  g: number,
-  h: number,
-) => void;
+export const stegabyte_decode: (a: number, b: number, c: number, d: number, e: number) => void;
+export const stegabyte_encode: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
 export const stegabyte_entropy: (a: number, b: number) => number;
 export const stegabyte_histogram: (a: number, b: number, c: number) => void;
 export const stegabyte_lsb_capacity: (a: number, b: number) => number;

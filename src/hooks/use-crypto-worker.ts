@@ -73,7 +73,18 @@ export function useCryptoWorker() {
 
         worker.addEventListener("message", handler);
         worker.addEventListener("error", onError);
-        worker.postMessage({ ...msg, id });
+        try {
+          // DataCloneError (e.g. circular refs in `msg`) throws synchronously
+          // outside this Promise executor. Catch it here so callers don't
+          // get a Promise that never resolves.
+          worker.postMessage({ ...msg, id });
+        } catch (err) {
+          settled = true;
+          worker.removeEventListener("message", handler);
+          worker.removeEventListener("error", onError);
+          clearTimeout(timeoutId);
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
       }),
     [],
   );

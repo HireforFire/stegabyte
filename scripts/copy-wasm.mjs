@@ -106,6 +106,36 @@ for (const f of FILES) {
   }
 
   await cp(from, join(DEST, f));
+
+  // Patch the regenerated wasm-bindgen glue so the typed-array memory
+  // caches use the same `.buffer.detached` check that `getDataViewMemory0`
+  // already uses. Without this, a memory grow followed by a stale view
+  // can read from a detached buffer in some engines. Idempotent — safe
+  // to run multiple times.
+  if (f === "stegabyte_stego_core.js") {
+    const destPath = join(DEST, f);
+    const raw = await readFile(destPath, "utf8");
+    let patched = raw;
+    // Each cache function has the same shape; replace by index, scoped to
+    // the function block via the surrounding identifier name.
+    for (const id of ["cachedUint32ArrayMemory0", "cachedUint8ArrayMemory0"]) {
+      const pattern = new RegExp(
+        `(if \\(${id} === null \\|\\| ${id}\\.byteLength === 0\\) \\{)`,
+        "g",
+      );
+      const replacement =
+        `if (${id} === null || ${id}.byteLength === 0 || ` +
+        `${id}.buffer.detached === true || ` +
+        `(${id}.buffer.detached === undefined && ` +
+        `${id}.buffer !== wasm.memory.buffer)) {`;
+      patched = patched.replace(pattern, replacement);
+    }
+    if (patched !== raw) {
+      await writeFile(destPath, patched, "utf8");
+      console.log(`[copy-wasm] patched ${f} (buffer detach guard)`);
+    }
+  }
+
   copiedAny = true;
   console.log(`[copy-wasm] copied ${f}`);
 }

@@ -42,14 +42,6 @@ const TOUCH_DEVICE_HINT =
   "PNG only. Other formats like JPEG, HEIC, and WebP re-encode pixels and destroy hidden data.";
 
 /**
- * Hint shown on touch devices. iOS Safari (and most mobile browsers)
- * don't support drag-and-drop, so the hint needs to read as a tap target.
- * Drag-and-drop language is misleading — users waste a tap and conclude
- * the page is broken.
- */
-const _TOUCH_HINT = "Tap to select a PNG";
-
-/**
  * The educational message shown when the user picks a non-PNG file.
  *
  * Kept inline so the copy is reviewable in one place and consistent across
@@ -99,7 +91,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
   }, []);
 
   /**
-   * Validate a single File via a Source-byte sniff and accept/reject it.
+   * Validate a single File via magic-byte sniff and accept/reject it.
    * Returns true if the file was accepted (caller may proceed).
    */
   const acceptIfPng = React.useCallback(
@@ -127,7 +119,7 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
   );
 
   /**
-   * Dispatch a validated in the pick to the parent. Single-file mode picks the
+   * Dispatch a validated pick to the parent. Single-file mode picks the
    * first PNG; multi-file mode reports all accepted PNGs.
    */
   const handleValidatedFiles = React.useCallback(
@@ -150,9 +142,9 @@ export const DropZone = React.forwardRef<HTMLDivElement, DropZoneProps>(function
       if (files.length === 0) return;
       const accepted: File[] = [];
       for (const file of files) {
-        // Sequential a in waits are e lingual — running these in parallel
-        // would make the rejection UX non-deterministic (race on error
-        // discard). The list is short (typically 1-3 files), so the cost is
+        // Sequential awaits are intentional — running these in parallel
+        // would make the rejection UX non-deterministic (race on setError
+        // calls). The list is short (typically 1-3 files), so the cost is
         // negligible.
         const ok = await acceptIfPng(file);
         if (ok) accepted.push(file);

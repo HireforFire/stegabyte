@@ -34,11 +34,25 @@ export function formatBits(bits: number): string {
 }
 
 /**
+ * Maximum number of bytes `hexToBytes` will decode in a single call.
+ * Bounds the work per call to prevent tab freezes from multi-MB hex
+ * strings (an attacker can otherwise pin the tab allocating GBs of memory).
+ */
+export const MAX_HEX_INPUT_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
  * Convert a hexadecimal string to a Uint8Array.
  * @param hex lowercase or uppercase hex string
  */
 export function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   const clean = hex.replace(/^0x/i, "");
+  // DoS guard: cap the input size before allocating the output buffer.
+  // 10 MB is generous — Stegabyte's encrypt flow produces ~tens of KB.
+  if (clean.length > MAX_HEX_INPUT_BYTES * 2) {
+    throw new Error(
+      `Hex input too large: ${clean.length} chars (max ${MAX_HEX_INPUT_BYTES * 2}).`,
+    );
+  }
   if (clean.length % 2 !== 0) throw new Error("Invalid hex string: odd length");
   const out = new Uint8Array(clean.length / 2) as Uint8Array<ArrayBuffer>;
   for (let i = 0; i < out.length; i++) {

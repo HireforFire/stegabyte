@@ -271,7 +271,7 @@ pub fn stegabyte_lsb_suspicion(pixels: &[u8]) -> f64 {
     }
     let ratio = lsb_ones as f64 / checked as f64;
     let deviation = (ratio - EXPECTED_LSB_RATIO).abs();
-    deviation.min(1.0) * SUSPICION_GAIN.min(1.0)
+    (deviation * SUSPICION_GAIN).min(1.0)
 }
 
 /// Returns a 256-bin histogram of R,G,B channel byte values (alpha skipped).

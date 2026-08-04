@@ -46,4 +46,10 @@ describe("hexToBytes edge cases", () => {
   it("handles lowercase and uppercase hex", () => {
     expect(Array.from(hexToBytes("aBcDeF"))).toEqual([0xab, 0xcd, 0xef]);
   });
+
+  it("throws on hex input exceeding the 10 MB size guard", () => {
+    // 10 MB of zeros hex-encoded = 20,971,520 chars; one byte over.
+    const huge = "a".repeat(10 * 1024 * 1024 * 2 + 2);
+    expect(() => hexToBytes(huge)).toThrow(/too large/);
+  });
 });

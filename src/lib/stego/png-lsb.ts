@@ -52,28 +52,34 @@ export async function readPngPixels(buffer: ArrayBuffer): Promise<ImageDataInfo>
   const blob = new Blob([buffer], { type: "image/png" });
   const url = URL.createObjectURL(blob);
   const img = new Image();
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Failed to load PNG image."));
-    img.src = url;
-  });
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
-  if (w > MAX_DIMENSION || h > MAX_DIMENSION) {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to load PNG image."));
+      img.src = url;
+    });
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (w > MAX_DIMENSION || h > MAX_DIMENSION) {
+      throw new Error(
+        `Image too large for the browser canvas (${w}x${h}). Max ${MAX_DIMENSION}px per side.`,
+      );
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get 2d context.");
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h);
+    return { pixels: new Uint8Array(data.data), width: w, height: h };
+  } finally {
+    // Revoke the blob URL on every exit path (success, dimension error,
+    // canvas error, image decode error). Without this, repeated decode
+    // failures leak blob URLs until the browser reclaims them — and
+    // browsers cap the total number of live blob URLs per origin.
     URL.revokeObjectURL(url);
-    throw new Error(
-      `Image too large for the browser canvas (${w}x${h}). Max ${MAX_DIMENSION}px per side.`,
-    );
   }
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not get 2d context.");
-  ctx.drawImage(img, 0, 0);
-  URL.revokeObjectURL(url);
-  const data = ctx.getImageData(0, 0, w, h);
-  return { pixels: new Uint8Array(data.data), width: w, height: h };
 }
 
 /**
@@ -118,7 +124,9 @@ export function encodeAndRenderPng(
     result = mod.encode(pixels, payload, width, height, originalLength);
   } else {
     // Fire-and-forget: schedule WASM load so the next call is faster.
-    void loadWasm();
+    // Attach a no-op catch so a load failure doesn't surface as an
+    // unhandled promise rejection (no observability in production).
+    loadWasm().catch(() => undefined);
     result = jsEncodePngLsb(pixels, payload, width, height, originalLength);
   }
   const dataUrl = renderPngDataUrl(result.outPixels, width, height);
@@ -190,6 +198,6 @@ export function decodePngLsbOrSync(
 ): ReturnType<typeof jsDecodePngLsb> {
   const mod = getWasmSync();
   if (mod) return mod.decode(pixels, width, height);
-  void loadWasm();
+  loadWasm().catch(() => undefined);
   return jsDecodePngLsb(pixels, width, height);
 }

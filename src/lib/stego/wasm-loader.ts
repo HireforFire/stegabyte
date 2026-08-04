@@ -36,6 +36,7 @@ import {
   estimatePngEntropy as jsEntropy,
   lsbSuspicion as jsLsbSuspicion,
   histogram as jsHistogram,
+  MAX_PAYLOAD_LENGTH_BYTES,
 } from "@/lib/stego/png-lsb-core";
 
 import type { DecodeResult } from "@/types/stego";
@@ -220,9 +221,19 @@ function makeWasmBackend(mod: WasmBindings): WasmStegoModule {
       const out = mod.stegabyte_decode(pixels, width, height);
       const HEADER_BYTES = mod.stegabyte_header_bytes();
       const dv = new DataView(out.buffer, out.byteOffset, out.byteLength);
+      // DoS guard: an attacker can craft a header with a huge payloadLength
+      // claim. Without this check, the bytesToHex() below would attempt to
+      // hex-encode ~800 MB of data, freezing the tab. Mirror the JS core's
+      // bound (see png-lsb-core.ts).
+      if (dv.byteLength < HEADER_BYTES) {
+        throw new Error("Corrupt header: WASM decode returned invalid data.");
+      }
       const version = dv.getUint16(4, true);
       const payloadLength = dv.getUint32(6, true);
       const originalLength = dv.getUint32(10, true);
+      if (payloadLength > MAX_PAYLOAD_LENGTH_BYTES) {
+        throw new Error("Corrupt header: payload length exceeds reasonable bounds.");
+      }
       const payloadBytes = out.subarray(HEADER_BYTES);
       const hex = bytesToHex(payloadBytes);
       return {
